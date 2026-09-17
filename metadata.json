@@ -1,0 +1,7 @@
+{
+  "name": "Vocab Match AR",
+  "description": "เกมการศึกษา AR จับคู่คำศัพท์ภาษาอังกฤษด้วยการตรวจจับนิ้วชี้ผ่านกล้องเว็บแคม (Hand Tracking) สำหรับนักเรียนชั้น ม.3",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

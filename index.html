@@ -1,0 +1,1951 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Vocab Match AR - เกมจับคู่คำศัพท์ภาษาอังกฤษ AR ม.3</title>
+    <meta name="description" content="เกมการศึกษา AR จับคู่คำศัพท์ภาษาอังกฤษด้วยการตรวจจับนิ้วชี้ผ่านกล้องเว็บแคม (Hand Tracking) สำหรับนักเรียนชั้น ม.3" />
+    <meta property="og:title" content="Vocab Match AR - เกมจับคู่คำศัพท์ภาษาอังกฤษ AR ม.3" />
+    <meta property="og:description" content="เกมการศึกษา AR จับคู่คำศัพท์ภาษาอังกฤษด้วยการตรวจจับนิ้วชี้ผ่านกล้องเว็บแคม (Hand Tracking) สำหรับนักเรียนชั้น ม.3" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts for Thai Language (Prompt & Sarabun) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- MediaPipe Hands & Camera Utils CDN (Ultra-fast, zero-lag AR tracking) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+      :root {
+        --primary: #06b6d4;
+        --primary-glow: rgba(6, 182, 212, 0.4);
+        --secondary: #8b5cf6;
+        --accent: #f59e0b;
+        --success: #10b981;
+        --error: #ef4444;
+        --bg-dark: #090d16;
+        --card-left-bg: rgba(15, 23, 42, 0.75);
+        --card-right-bg: rgba(30, 27, 75, 0.75);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      body, html {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: var(--bg-dark);
+        font-family: 'Prompt', 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #f8fafc;
+      }
+
+      #game-container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      /* Hidden camera video feed */
+      #webcam-video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* Fullscreen Interactive Canvas */
+      #game-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        z-index: 10;
+      }
+
+      /* UI HUD Overlay Layer */
+      #hud-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 16px 24px;
+      }
+
+      .interactive-control {
+        pointer-events: auto;
+      }
+
+      /* Top Bar */
+      .top-hud {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        width: 100%;
+        gap: 16px;
+      }
+
+      .hud-card {
+        background: rgba(15, 23, 42, 0.82);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 16px;
+        padding: 10px 18px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      }
+
+      .hud-metric {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .hud-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .hud-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.2;
+      }
+
+      .hud-value.highlight-cyan {
+        color: #38bdf8;
+        text-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+      }
+
+      .hud-value.highlight-gold {
+        color: #fbbf24;
+        text-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+      }
+
+      .hud-divider {
+        width: 1px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      /* Hearts container */
+      .hearts-container {
+        display: flex;
+        gap: 6px;
+        font-size: 22px;
+      }
+
+      .heart-icon {
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+      }
+
+      .heart-icon.lost {
+        filter: grayscale(1) opacity(0.25);
+        transform: scale(0.8);
+      }
+
+      /* Status Indicator Pill */
+      .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 8px 16px;
+        border-radius: 9999px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .status-pill:hover {
+        background: rgba(30, 41, 59, 0.95);
+        border-color: rgba(255, 255, 255, 0.25);
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: #ef4444;
+        box-shadow: 0 0 8px #ef4444;
+      }
+
+      .status-dot.active {
+        background-color: #10b981;
+        box-shadow: 0 0 12px #10b981;
+        animation: pulse 1.5s infinite;
+      }
+
+      .status-dot.searching {
+        background-color: #f59e0b;
+        box-shadow: 0 0 10px #f59e0b;
+        animation: pulse 1s infinite;
+      }
+
+      .status-dot.mouse {
+        background-color: #38bdf8;
+        box-shadow: 0 0 10px #38bdf8;
+      }
+
+      @keyframes pulse {
+        0% { transform: scale(0.9); opacity: 0.8; }
+        50% { transform: scale(1.2); opacity: 1; }
+        100% { transform: scale(0.9); opacity: 0.8; }
+      }
+
+      /* Bottom Bar */
+      .bottom-hud {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+      }
+
+      .instruction-banner {
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        padding: 10px 24px;
+        border-radius: 9999px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #e2e8f0;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 90%;
+        text-align: center;
+      }
+
+      .banner-icon {
+        font-size: 18px;
+        color: #38bdf8;
+      }
+
+      .bottom-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .hud-btn {
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #f8fafc;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 18px;
+        border-radius: 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      }
+
+      .hud-btn:hover {
+        background: rgba(30, 41, 59, 0.95);
+        border-color: var(--primary);
+        color: #ffffff;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(6, 182, 212, 0.3);
+      }
+
+      .hud-btn:active {
+        transform: translateY(0);
+      }
+
+      .hud-btn.primary {
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        border-color: #38bdf8;
+      }
+      .hud-btn.primary:hover {
+        background: linear-gradient(135deg, #0369a1, #0284c7);
+        box-shadow: 0 6px 24px rgba(56, 189, 248, 0.4);
+      }
+
+      /* Fullscreen Modal */
+      #summary-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(3, 7, 18, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        z-index: 100;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.35s ease;
+        padding: 20px;
+      }
+
+      #summary-modal.show {
+        display: flex;
+        opacity: 1;
+      }
+
+      .modal-card {
+        background: linear-gradient(160deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 28px;
+        padding: 36px 40px;
+        max-width: 540px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(6, 182, 212, 0.2);
+        transform: scale(0.9);
+        transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      #summary-modal.show .modal-card {
+        transform: scale(1);
+      }
+
+      .modal-icon-badge {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        margin: 0 auto 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 38px;
+        background: rgba(6, 182, 212, 0.15);
+        border: 2px solid rgba(6, 182, 212, 0.4);
+        box-shadow: 0 0 24px rgba(6, 182, 212, 0.3);
+      }
+
+      .modal-title {
+        font-size: 28px;
+        font-weight: 800;
+        color: #ffffff;
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
+      }
+
+      .modal-subtitle {
+        font-size: 15px;
+        color: #94a3b8;
+        margin-bottom: 24px;
+        line-height: 1.5;
+      }
+
+      /* Stars rating */
+      .stars-row {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .star-icon {
+        font-size: 36px;
+        color: #475569;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .star-icon.earned {
+        color: #fbbf24;
+        filter: drop-shadow(0 0 16px rgba(251, 191, 36, 0.8));
+        transform: scale(1.15);
+      }
+
+      /* Stats Grid */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+        margin-bottom: 28px;
+        text-align: left;
+      }
+
+      .stat-box {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 14px 18px;
+      }
+
+      .stat-box-title {
+        font-size: 12px;
+        font-weight: 500;
+        color: #94a3b8;
+        margin-bottom: 4px;
+      }
+
+      .stat-box-val {
+        font-size: 22px;
+        font-weight: 800;
+        color: #f8fafc;
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+      }
+
+      .btn-primary-action {
+        background: linear-gradient(135deg, #0284c7, #0ea5e9);
+        color: #ffffff;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 700;
+        padding: 14px 28px;
+        border-radius: 14px;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        flex: 1;
+        justify-content: center;
+      }
+
+      .btn-primary-action:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(14, 165, 233, 0.5);
+      }
+
+      .btn-secondary-action {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 600;
+        padding: 14px 20px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+      }
+
+      .btn-secondary-action:hover {
+        background: rgba(255, 255, 255, 0.18);
+      }
+
+      /* Camera permission notice overlay */
+      #permission-notice {
+        position: fixed;
+        bottom: 90px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 16px;
+        padding: 12px 24px;
+        color: #f8fafc;
+        font-size: 13px;
+        z-index: 50;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      }
+      #permission-notice.show {
+        display: flex;
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 768px) {
+        #hud-overlay {
+          padding: 10px 12px;
+        }
+        .hud-card {
+          padding: 6px 12px;
+          gap: 10px;
+        }
+        .hud-value {
+          font-size: 16px;
+        }
+        .instruction-banner {
+          font-size: 12px;
+          padding: 8px 14px;
+        }
+        .hud-btn {
+          padding: 6px 12px;
+          font-size: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container">
+      <!-- Hidden Video Element for MediaPipe input -->
+      <video id="webcam-video" playsinline muted></video>
+
+      <!-- Main High-Speed Canvas -->
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Heads-Up Display (HUD) Overlay -->
+      <div id="hud-overlay">
+        <!-- Top HUD Bar -->
+        <div class="top-hud">
+          <!-- Left: Score, Progress, Timer -->
+          <div class="hud-card interactive-control">
+            <div class="hud-metric">
+              <span class="hud-label">คะแนน (Score)</span>
+              <span id="hud-score" class="hud-value highlight-cyan">0</span>
+            </div>
+            <div class="hud-divider"></div>
+            <div class="hud-metric">
+              <span class="hud-label">ความคืบหน้า</span>
+              <span id="hud-progress" class="hud-value highlight-gold">0 / 10</span>
+            </div>
+            <div class="hud-divider"></div>
+            <div class="hud-metric">
+              <span class="hud-label">เวลา (Timer)</span>
+              <span id="hud-timer" class="hud-value">00:00</span>
+            </div>
+          </div>
+
+          <!-- Right: Hearts, Accuracy, AR Mode indicator -->
+          <div class="hud-card interactive-control">
+            <div class="hud-metric">
+              <span class="hud-label">ชีวิต (Lives)</span>
+              <div id="hud-hearts" class="hearts-container">
+                <span class="heart-icon">❤️</span>
+                <span class="heart-icon">❤️</span>
+                <span class="heart-icon">❤️</span>
+              </div>
+            </div>
+            <div class="hud-divider"></div>
+            <div class="hud-metric">
+              <span class="hud-label">ความแม่นยำ</span>
+              <span id="hud-accuracy" class="hud-value">100%</span>
+            </div>
+            <div class="hud-divider"></div>
+            <div id="status-pill-btn" class="status-pill" title="คลิกเพื่อสลับกล้อง AR หรือโหมดเมาส์">
+              <span id="status-indicator-dot" class="status-dot"></span>
+              <span id="status-indicator-text">กำลังโหลด AR...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom HUD Bar -->
+        <div class="bottom-hud">
+          <!-- Instructions banner -->
+          <div class="instruction-banner">
+            <span class="banner-icon">✨</span>
+            <span id="banner-text">ใช้นิ้วชี้แตะการ์ดภาษาอังกฤษ (ฝั่งซ้าย) แล้วลากเส้นเรืองแสงไปหาคำแปลภาษาไทย (ฝั่งขวา) หรือคลิกลากด้วยเมาส์</span>
+          </div>
+
+          <!-- Controls -->
+          <div class="bottom-controls interactive-control">
+            <button id="btn-restart" class="hud-btn primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+              เริ่มใหม่ (Restart)
+            </button>
+            <button id="btn-toggle-camera" class="hud-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+              <span id="camera-btn-text">เปิด/ปิดกล้อง AR</span>
+            </button>
+            <button id="btn-toggle-mouse" class="hud-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+              <span id="mouse-btn-text">โหมดเมาส์ / ทัช</span>
+            </button>
+            <button id="btn-toggle-sound" class="hud-btn">
+              <span id="sound-btn-icon">🔊</span>
+              <span id="sound-btn-text">เสียง: เปิด</span>
+            </button>
+            <button id="btn-download-html" class="hud-btn" title="บันทึกเป็นไฟล์ HTML เดี่ยวเปิดเล่นออฟไลน์ได้">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              ดาวน์โหลด Single HTML
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Permission Hint -->
+      <div id="permission-notice">
+        <span>📷 กรุณากด "อนุญาต" (Allow) กล้อง เพื่อใช้งาน AR Hand Tracking หรือใช้งานโหมดเมาส์ได้ทันที</span>
+        <button id="dismiss-notice-btn" class="hud-btn" style="padding: 4px 10px; font-size: 11px;">รับทราบ</button>
+      </div>
+
+      <!-- Result Summary Modal -->
+      <div id="summary-modal">
+        <div class="modal-card">
+          <div id="modal-badge" class="modal-icon-badge">🏆</div>
+          <h2 id="modal-title" class="modal-title">สรุปผลการเล่น</h2>
+          <p id="modal-subtitle" class="modal-subtitle">ยอดเยี่ยมมาก! คุณมีความแม่นยำและตอบสนองได้รวดเร็ว</p>
+
+          <div id="modal-stars" class="stars-row">
+            <span class="star-icon">★</span>
+            <span class="star-icon">★</span>
+            <span class="star-icon">★</span>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-box-title">คะแนนรวม (Total Score)</div>
+              <div id="summary-score" class="stat-box-val highlight-cyan">100</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-title">ความแม่นยำ (Accuracy)</div>
+              <div id="summary-accuracy" class="stat-box-val highlight-gold">100%</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-title">เวลาที่ใช้ (Time Taken)</div>
+              <div id="summary-time" class="stat-box-val">01:15</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-title">ตอบถูก / ตอบผิด</div>
+              <div id="summary-ratio" class="stat-box-val">10 / 0</div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button id="btn-modal-restart" class="btn-primary-action">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+              เล่นอีกครั้ง (Play Again)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Self-Contained Zero-Dependency Game Engine Script (ES6) -->
+    <script type="module">
+      /**
+       * Vocab Match AR - Educational Single-File HTML5 AR Game
+       * Built with HTML5 Canvas, Vanilla JS (ES6), MediaPipe Hands & Web Audio API
+       * Zero external image or sound assets.
+       */
+
+      // --- 1. VOCABULARY DATABASE ---
+      const VOCAB_DATA = [
+        { en: "Doctor", th: "หมอ", icon: "🩺" },
+        { en: "Teacher", th: "คุณครู", icon: "📚" },
+        { en: "Police", th: "ตำรวจ", icon: "👮" },
+        { en: "Nurse", th: "พยาบาล", icon: "💉" },
+        { en: "Chef", th: "พ่อครัว", icon: "🍳" },
+        { en: "Farmer", th: "ชาวนา", icon: "🌾" },
+        { en: "Pilot", th: "นักบิน", icon: "✈️" },
+        { en: "Singer", th: "นักร้อง", icon: "🎤" },
+        { en: "Firefighter", th: "นักดับเพลิง", icon: "🚒" },
+        { en: "Dentist", th: "ทันตแพทย์", icon: "🦷" }
+      ];
+
+      // --- 2. WEB AUDIO API SYNTHESIZER ---
+      class SoundEngine {
+        constructor() {
+          this.ctx = null;
+          this.enabled = true;
+        }
+
+        init() {
+          if (!this.ctx) {
+            try {
+              const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+              if (AudioContextClass) {
+                this.ctx = new AudioContextClass();
+              }
+            } catch (e) {
+              console.warn("AudioContext failed:", e);
+            }
+          }
+          if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+          }
+        }
+
+        playChime() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          try {
+            // Bright cheerful rising arpeggio (C5, E5, G5, C6)
+            const notes = [523.25, 659.25, 783.99, 1046.50];
+            const now = this.ctx.currentTime;
+            notes.forEach((freq, idx) => {
+              const osc = this.ctx.createOscillator();
+              const gain = this.ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+              gain.gain.setValueAtTime(0.001, now + idx * 0.08);
+              gain.gain.exponentialRampToValueAtTime(0.25, now + idx * 0.08 + 0.02);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.4);
+
+              osc.connect(gain);
+              gain.connect(this.ctx.destination);
+
+              osc.start(now + idx * 0.08);
+              osc.stop(now + idx * 0.08 + 0.45);
+            });
+          } catch (e) {
+            console.warn("Chime sound error:", e);
+          }
+        }
+
+        playError() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          try {
+            // Low dissonant buzzer/shake sound
+            const now = this.ctx.currentTime;
+            const osc1 = this.ctx.createOscillator();
+            const osc2 = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc1.type = 'sawtooth';
+            osc2.type = 'square';
+            osc1.frequency.setValueAtTime(150, now);
+            osc1.frequency.exponentialRampToValueAtTime(80, now + 0.28);
+            osc2.frequency.setValueAtTime(158, now);
+            osc2.frequency.exponentialRampToValueAtTime(84, now + 0.28);
+
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc1.start(now);
+            osc2.start(now);
+            osc1.stop(now + 0.32);
+            osc2.stop(now + 0.32);
+          } catch (e) {
+            console.warn("Error sound error:", e);
+          }
+        }
+
+        playSelect() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          try {
+            // Subtle selection pop
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, now);
+            osc.frequency.exponentialRampToValueAtTime(1320, now + 0.05);
+
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc.start(now);
+            osc.stop(now + 0.07);
+          } catch (e) {}
+        }
+
+        playVictory() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          try {
+            const chords = [
+              [523.25, 659.25, 783.99],
+              [587.33, 739.99, 880.00],
+              [659.25, 830.61, 987.77],
+              [1046.50, 1318.51, 1567.98]
+            ];
+            const now = this.ctx.currentTime;
+            chords.forEach((chord, step) => {
+              chord.forEach(f => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(f, now + step * 0.18);
+                gain.gain.setValueAtTime(0.18, now + step * 0.18);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + step * 0.18 + 0.5);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + step * 0.18);
+                osc.stop(now + step * 0.18 + 0.55);
+              });
+            });
+          } catch (e) {}
+        }
+
+        playGameOver() {
+          if (!this.enabled) return;
+          this.init();
+          if (!this.ctx) return;
+          try {
+            const notes = [440, 415.3, 392, 369.99];
+            const now = this.ctx.currentTime;
+            notes.forEach((freq, idx) => {
+              const osc = this.ctx.createOscillator();
+              const gain = this.ctx.createGain();
+              osc.type = 'sawtooth';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.2);
+              gain.gain.setValueAtTime(0.18, now + idx * 0.2);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.2 + 0.35);
+              osc.connect(gain);
+              gain.connect(this.ctx.destination);
+              osc.start(now + idx * 0.2);
+              osc.stop(now + idx * 0.2 + 0.38);
+            });
+          } catch (e) {}
+        }
+      }
+
+      // --- 3. PARTICLE FX ENGINE ---
+      class ParticleSystem {
+        constructor() {
+          this.particles = [];
+        }
+
+        spawnSparkles(x, y, count = 28, color = '#38bdf8') {
+          const colors = [color, '#ffffff', '#fbbf24', '#34d399', '#f472b6'];
+          for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 7;
+            this.particles.push({
+              x,
+              y,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 1.5,
+              size: 3 + Math.random() * 5,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              alpha: 1,
+              decay: 0.015 + Math.random() * 0.02,
+              type: Math.random() > 0.4 ? 'star' : 'circle',
+              rotation: Math.random() * Math.PI,
+              rotSpeed: (Math.random() - 0.5) * 0.2
+            });
+          }
+        }
+
+        spawnLinePulse(x1, y1, x2, y2, count = 12) {
+          for (let i = 0; i < count; i++) {
+            const t = Math.random();
+            this.particles.push({
+              x: x1 + (x2 - x1) * t,
+              y: y1 + (y2 - y1) * t,
+              vx: (Math.random() - 0.5) * 2,
+              vy: (Math.random() - 0.5) * 2,
+              size: 2 + Math.random() * 3,
+              color: '#38bdf8',
+              alpha: 0.8,
+              decay: 0.04,
+              type: 'circle'
+            });
+          }
+        }
+
+        update() {
+          for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.12; // gravity
+            p.alpha -= p.decay;
+            if (p.rotation !== undefined) p.rotation += p.rotSpeed;
+            if (p.alpha <= 0) {
+              this.particles.splice(i, 1);
+            }
+          }
+        }
+
+        draw(ctx) {
+          ctx.save();
+          for (const p of this.particles) {
+            ctx.globalAlpha = Math.max(0, p.alpha);
+            ctx.fillStyle = p.color;
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 8;
+
+            if (p.type === 'star') {
+              ctx.save();
+              ctx.translate(p.x, p.y);
+              ctx.rotate(p.rotation || 0);
+              const r = p.size;
+              ctx.beginPath();
+              for (let j = 0; j < 5; j++) {
+                ctx.lineTo(Math.cos((18 + j * 72) * 0.0174533) * r, -Math.sin((18 + j * 72) * 0.0174533) * r);
+                ctx.lineTo(Math.cos((54 + j * 72) * 0.0174533) * (r * 0.45), -Math.sin((54 + j * 72) * 0.0174533) * (r * 0.45));
+              }
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            } else {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          ctx.restore();
+        }
+      }
+
+      // --- 4. VOCAB MATCH AR CORE GAME ---
+      class VocabMatchAR {
+        constructor() {
+          this.canvas = document.getElementById('game-canvas');
+          this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+          this.video = document.getElementById('webcam-video');
+          this.audio = new SoundEngine();
+          this.particles = new ParticleSystem();
+
+          // Game Configuration
+          this.TOTAL_ROUNDS = 10;
+          this.CARDS_PER_WAVE = 5;
+          this.INITIAL_LIVES = 3;
+
+          // Game State
+          this.score = 0;
+          this.lives = this.INITIAL_LIVES;
+          this.progress = 0;
+          this.correctCount = 0;
+          this.wrongCount = 0;
+          this.timerSeconds = 0;
+          this.timerInterval = null;
+          this.gameActive = false;
+          this.isGameOver = false;
+
+          // Question Pool & Wave Tracking
+          this.shuffledQuestions = [];
+          this.waveIndex = 0;
+          this.leftCards = [];
+          this.rightCards = [];
+
+          // Interaction & Direct Laser Line
+          this.selectedLeftCard = null;
+          this.errorFeedback = null; // { leftCard, rightCard, timer: 0 }
+
+          // Tracking Coordinates
+          this.rawHandPoint = null; // { x, y }
+          this.smoothHand = { x: -1000, y: -1000 };
+          this.hasHand = false;
+          this.lastHandTimestamp = 0;
+          this.lerpFactor = 0.85; // Exponential Lerp Factor 0.85 as specified
+
+          // Control Modes & Video State
+          this.useCamera = true;
+          this.cameraStream = null;
+          this.mediaPipeCamera = null;
+          this.mediaPipeHands = null;
+          this.mousePos = { x: -1000, y: -1000 };
+          this.isMouseDown = false;
+          this.controlMode = 'ar'; // 'ar' or 'mouse'
+
+          // Bindings
+          this.onResize = this.onResize.bind(this);
+          this.gameLoop = this.gameLoop.bind(this);
+          this.onHandResults = this.onHandResults.bind(this);
+
+          this.initDOM();
+          this.setupEvents();
+          this.onResize();
+          this.startNewGame();
+          this.initMediaPipe();
+          requestAnimationFrame(this.gameLoop);
+        }
+
+        initDOM() {
+          this.hudScore = document.getElementById('hud-score');
+          this.hudProgress = document.getElementById('hud-progress');
+          this.hudTimer = document.getElementById('hud-timer');
+          this.hudHearts = document.getElementById('hud-hearts');
+          this.hudAccuracy = document.getElementById('hud-accuracy');
+          this.statusDot = document.getElementById('status-indicator-dot');
+          this.statusText = document.getElementById('status-indicator-text');
+          this.bannerText = document.getElementById('banner-text');
+
+          this.summaryModal = document.getElementById('summary-modal');
+          this.modalTitle = document.getElementById('modal-title');
+          this.modalSubtitle = document.getElementById('modal-subtitle');
+          this.modalBadge = document.getElementById('modal-badge');
+          this.modalStars = document.getElementById('modal-stars');
+          this.summaryScore = document.getElementById('summary-score');
+          this.summaryAccuracy = document.getElementById('summary-accuracy');
+          this.summaryTime = document.getElementById('summary-time');
+          this.summaryRatio = document.getElementById('summary-ratio');
+
+          this.permissionNotice = document.getElementById('permission-notice');
+        }
+
+        setupEvents() {
+          window.addEventListener('resize', this.onResize);
+
+          // Mouse / Touch Fallback Tracking
+          const updatePointer = (clientX, clientY, isDown = null) => {
+            const rect = this.canvas.getBoundingClientRect();
+            this.mousePos.x = clientX - rect.left;
+            this.mousePos.y = clientY - rect.top;
+            if (isDown !== null) this.isMouseDown = isDown;
+
+            // If in mouse mode or camera lost, pointer acts as tracking point
+            if (this.controlMode === 'mouse' || !this.hasHand) {
+              this.smoothHand.x = this.mousePos.x;
+              this.smoothHand.y = this.mousePos.y;
+            }
+          };
+
+          this.canvas.addEventListener('mousemove', (e) => {
+            updatePointer(e.clientX, e.clientY);
+            this.handlePointerMove(this.mousePos.x, this.mousePos.y);
+          });
+
+          this.canvas.addEventListener('mousedown', (e) => {
+            this.audio.init();
+            updatePointer(e.clientX, e.clientY, true);
+            this.handlePointerDown(this.mousePos.x, this.mousePos.y);
+          });
+
+          window.addEventListener('mouseup', (e) => {
+            updatePointer(e.clientX, e.clientY, false);
+            this.handlePointerUp(this.mousePos.x, this.mousePos.y);
+          });
+
+          // Touch events
+          this.canvas.addEventListener('touchstart', (e) => {
+            this.audio.init();
+            if (e.touches.length > 0) {
+              const t = e.touches[0];
+              updatePointer(t.clientX, t.clientY, true);
+              this.handlePointerDown(this.mousePos.x, this.mousePos.y);
+            }
+          }, { passive: true });
+
+          this.canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+              const t = e.touches[0];
+              updatePointer(t.clientX, t.clientY);
+              this.handlePointerMove(this.mousePos.x, this.mousePos.y);
+            }
+          }, { passive: true });
+
+          this.canvas.addEventListener('touchend', (e) => {
+            updatePointer(this.mousePos.x, this.mousePos.y, false);
+            this.handlePointerUp(this.mousePos.x, this.mousePos.y);
+          });
+
+          // HUD Action Buttons
+          const restartBtn = document.getElementById('btn-restart');
+          if (restartBtn) {
+            restartBtn.addEventListener('click', () => {
+              this.audio.playSelect();
+              this.startNewGame();
+            });
+          }
+
+          const modalRestartBtn = document.getElementById('btn-modal-restart');
+          if (modalRestartBtn) {
+            modalRestartBtn.addEventListener('click', () => {
+              this.audio.playSelect();
+              this.hideModal();
+              this.startNewGame();
+            });
+          }
+
+          const toggleCamBtn = document.getElementById('btn-toggle-camera');
+          if (toggleCamBtn) {
+            toggleCamBtn.addEventListener('click', () => {
+              this.audio.playSelect();
+              this.toggleCamera();
+            });
+          }
+
+          const toggleMouseBtn = document.getElementById('btn-toggle-mouse');
+          if (toggleMouseBtn) {
+            toggleMouseBtn.addEventListener('click', () => {
+              this.audio.playSelect();
+              this.toggleControlMode();
+            });
+          }
+
+          const toggleSoundBtn = document.getElementById('btn-toggle-sound');
+          if (toggleSoundBtn) {
+            toggleSoundBtn.addEventListener('click', () => {
+              this.audio.enabled = !this.audio.enabled;
+              const text = document.getElementById('sound-btn-text');
+              const icon = document.getElementById('sound-btn-icon');
+              if (text) text.textContent = this.audio.enabled ? 'เสียง: เปิด' : 'เสียง: ปิด';
+              if (icon) icon.textContent = this.audio.enabled ? '🔊' : '🔇';
+            });
+          }
+
+          const statusBtn = document.getElementById('status-pill-btn');
+          if (statusBtn) {
+            statusBtn.addEventListener('click', () => {
+              this.toggleControlMode();
+            });
+          }
+
+          const downloadBtn = document.getElementById('btn-download-html');
+          if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => {
+              this.downloadSingleHTML();
+            });
+          }
+
+          const dismissBtn = document.getElementById('dismiss-notice-btn');
+          if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => {
+              if (this.permissionNotice) this.permissionNotice.classList.remove('show');
+            });
+          }
+        }
+
+        onResize() {
+          if (!this.canvas) return;
+          this.canvas.width = window.innerWidth;
+          this.canvas.height = window.innerHeight;
+          this.calculateCardLayout();
+        }
+
+        // --- 5. CARD LAYOUT CALCULATIONS ---
+        calculateCardLayout() {
+          const width = this.canvas.width;
+          const height = this.canvas.height;
+
+          // Responsive dimensions
+          const isMobile = width < 768;
+          const topMargin = isMobile ? 80 : 105;
+          const bottomMargin = isMobile ? 120 : 110;
+          const usableHeight = height - topMargin - bottomMargin;
+
+          const numCards = Math.max(1, this.leftCards.length);
+          const gap = isMobile ? 8 : 14;
+          const cardHeight = Math.min(isMobile ? 56 : 74, (usableHeight - (numCards - 1) * gap) / numCards);
+          const cardWidth = Math.min(isMobile ? width * 0.38 : 280, width * 0.35);
+
+          const leftX = isMobile ? 16 : Math.max(30, width * 0.08);
+          const rightX = isMobile ? width - cardWidth - 16 : width - cardWidth - Math.max(30, width * 0.08);
+
+          this.leftCards.forEach((card, idx) => {
+            card.targetX = leftX;
+            card.targetY = topMargin + idx * (cardHeight + gap);
+            card.targetW = cardWidth;
+            card.targetH = cardHeight;
+            if (card.x === undefined) {
+              card.x = card.targetX;
+              card.y = card.targetY;
+              card.w = card.targetW;
+              card.h = card.targetH;
+            }
+          });
+
+          this.rightCards.forEach((card, idx) => {
+            card.targetX = rightX;
+            card.targetY = topMargin + idx * (cardHeight + gap);
+            card.targetW = cardWidth;
+            card.targetH = cardHeight;
+            if (card.x === undefined) {
+              card.x = card.targetX;
+              card.y = card.targetY;
+              card.w = card.targetW;
+              card.h = card.targetH;
+            }
+          });
+        }
+
+        // --- 6. MEDIAPIPE AR TRACKING ENGINE ---
+        async initMediaPipe() {
+          this.updateStatus('searching', 'กำลังเตรียมกล้อง AR...');
+
+          if (!window.Hands || !window.Camera) {
+            console.warn("MediaPipe libraries loading from CDN...");
+            setTimeout(() => this.initMediaPipe(), 500);
+            return;
+          }
+
+          try {
+            // Ultra-Fast / Low Latency (modelComplexity: 0)
+            this.mediaPipeHands = new window.Hands({
+              locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+
+            this.mediaPipeHands.setOptions({
+              maxNumHands: 1,
+              modelComplexity: 0,
+              minDetectionConfidence: 0.5,
+              minTrackingConfidence: 0.5
+            });
+
+            this.mediaPipeHands.onResults(this.onHandResults);
+
+            if (this.useCamera && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+              this.startCameraFeed();
+            } else {
+              this.switchToMouseMode();
+            }
+          } catch (err) {
+            console.error("MediaPipe initialization error:", err);
+            this.switchToMouseMode();
+          }
+        }
+
+        async startCameraFeed() {
+          try {
+            if (this.permissionNotice) this.permissionNotice.classList.add('show');
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: 'user'
+              },
+              audio: false
+            });
+
+            if (this.permissionNotice) this.permissionNotice.classList.remove('show');
+            this.cameraStream = stream;
+            this.video.srcObject = stream;
+            await this.video.play();
+
+            this.mediaPipeCamera = new window.Camera(this.video, {
+              onFrame: async () => {
+                if (this.mediaPipeHands && this.useCamera) {
+                  try {
+                    await this.mediaPipeHands.send({ image: this.video });
+                  } catch (e) {
+                    // Ignore frame drop gracefully
+                  }
+                }
+              },
+              width: 1280,
+              height: 720
+            });
+            this.mediaPipeCamera.start();
+
+            this.controlMode = 'ar';
+            this.updateStatus('active', 'AR: ค้นหานิ้วชี้...');
+          } catch (err) {
+            console.warn("Camera access denied or unavailable:", err);
+            if (this.permissionNotice) this.permissionNotice.classList.remove('show');
+            this.switchToMouseMode();
+          }
+        }
+
+        onHandResults(results) {
+          if (!this.useCamera || this.controlMode !== 'ar') return;
+
+          if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const landmarks = results.multiHandLandmarks[0];
+            // TARGET & INDEX LOCK: Landmark 8 (INDEX_FINGER_TIP) only!
+            const indexTip = landmarks[8];
+
+            if (indexTip) {
+              // 1:1 Mirror-Aligned Coordinate Mapping:
+              // Mirrored webcam: raw landmark x is mirrored -> canvasX = (1 - x) * width
+              const targetX = (1 - indexTip.x) * this.canvas.width;
+              const targetY = indexTip.y * this.canvas.height;
+
+              this.rawHandPoint = { x: targetX, y: targetY };
+              this.hasHand = true;
+              this.lastHandTimestamp = performance.now();
+
+              // Initialize position immediately if first frame
+              if (this.smoothHand.x < 0) {
+                this.smoothHand.x = targetX;
+                this.smoothHand.y = targetY;
+              } else {
+                // Exponential Linear Interpolation (Lerp Factor 0.85) to eliminate jitter & lock firmly
+                this.smoothHand.x += (targetX - this.smoothHand.x) * this.lerpFactor;
+                this.smoothHand.y += (targetY - this.smoothHand.y) * this.lerpFactor;
+              }
+
+              this.updateStatus('active', 'AR: ล็อกปลายนิ้วชี้ 👆');
+
+              // Continuous AR Hand Interaction Loop
+              this.processARInteraction(this.smoothHand.x, this.smoothHand.y);
+            }
+          } else {
+            // Hand lost grace period (400ms)
+            if (performance.now() - this.lastHandTimestamp > 400) {
+              this.hasHand = false;
+              this.updateStatus('searching', 'AR: ยกนิ้วชี้ขึ้นหน้ากล้อง');
+            }
+          }
+        }
+
+        toggleCamera() {
+          this.useCamera = !this.useCamera;
+          const btnText = document.getElementById('camera-btn-text');
+
+          if (this.useCamera) {
+            if (btnText) btnText.textContent = 'ปิดกล้อง AR';
+            this.controlMode = 'ar';
+            if (!this.cameraStream) {
+              this.startCameraFeed();
+            }
+          } else {
+            if (btnText) btnText.textContent = 'เปิดกล้อง AR';
+            this.controlMode = 'mouse';
+            this.updateStatus('mouse', 'โหมดเมาส์ / ทัชสกรีน');
+          }
+        }
+
+        toggleControlMode() {
+          if (this.controlMode === 'ar') {
+            this.switchToMouseMode();
+          } else {
+            this.controlMode = 'ar';
+            this.useCamera = true;
+            const btnText = document.getElementById('camera-btn-text');
+            if (btnText) btnText.textContent = 'ปิดกล้อง AR';
+            if (!this.cameraStream) {
+              this.startCameraFeed();
+            } else {
+              this.updateStatus('active', 'AR: พร้อมตรวจจับนิ้วชี้');
+            }
+          }
+        }
+
+        switchToMouseMode() {
+          this.controlMode = 'mouse';
+          this.updateStatus('mouse', 'โหมดเมาส์ / ทัชสกรีน');
+          if (this.bannerText) {
+            this.bannerText.textContent = '🖱️ โหมดเมาส์: คลิกลากจากการ์ดภาษาอังกฤษ (ซ้าย) ไปหาคำแปลภาษาไทย (ขวา)';
+          }
+        }
+
+        updateStatus(type, text) {
+          if (this.statusDot) {
+            this.statusDot.className = 'status-dot ' + type;
+          }
+          if (this.statusText) {
+            this.statusText.textContent = text;
+          }
+        }
+
+        // --- 7. GAMEPLAY MECHANICS ---
+        startNewGame() {
+          this.score = 0;
+          this.lives = this.INITIAL_LIVES;
+          this.progress = 0;
+          this.correctCount = 0;
+          this.wrongCount = 0;
+          this.timerSeconds = 0;
+          this.isGameOver = false;
+          this.gameActive = true;
+          this.selectedLeftCard = null;
+          this.errorFeedback = null;
+
+          // Shuffle full question pool
+          this.shuffledQuestions = [...VOCAB_DATA].sort(() => Math.random() - 0.5);
+          this.waveIndex = 0;
+
+          this.loadWave(0);
+          this.startTimer();
+          this.updateHUD();
+        }
+
+        loadWave(waveNum) {
+          this.waveIndex = waveNum;
+          const startIndex = waveNum * this.CARDS_PER_WAVE;
+          const currentBatch = this.shuffledQuestions.slice(startIndex, startIndex + this.CARDS_PER_WAVE);
+
+          // Left cards: English (in original batch order)
+          this.leftCards = currentBatch.map((item, idx) => ({
+            id: item.en,
+            text: item.en,
+            subtext: item.icon || '📖',
+            matched: false,
+            animProgress: 1, // for entry transition
+            alpha: 1,
+            shake: 0
+          }));
+
+          // Right cards: Thai (randomly shuffled)
+          const shuffledThai = [...currentBatch].sort(() => Math.random() - 0.5);
+          this.rightCards = shuffledThai.map((item, idx) => ({
+            id: item.en,
+            text: item.th,
+            subtext: 'ความหมาย',
+            matched: false,
+            animProgress: 1,
+            alpha: 1,
+            shake: 0
+          }));
+
+          this.calculateCardLayout();
+
+          // Trigger smooth spawn animation
+          this.leftCards.forEach((c, i) => {
+            c.x = c.targetX - 80;
+            c.alpha = 0;
+          });
+          this.rightCards.forEach((c, i) => {
+            c.x = c.targetX + 80;
+            c.alpha = 0;
+          });
+        }
+
+        startTimer() {
+          if (this.timerInterval) clearInterval(this.timerInterval);
+          this.timerInterval = setInterval(() => {
+            if (this.gameActive && !this.isGameOver) {
+              this.timerSeconds++;
+              this.updateTimerDisplay();
+            }
+          }, 1000);
+        }
+
+        updateTimerDisplay() {
+          if (!this.hudTimer) return;
+          const mins = Math.floor(this.timerSeconds / 60).toString().padStart(2, '0');
+          const secs = (this.timerSeconds % 60).toString().padStart(2, '0');
+          this.hudTimer.textContent = `${mins}:${secs}`;
+        }
+
+        updateHUD() {
+          if (this.hudScore) this.hudScore.textContent = this.score;
+          if (this.hudProgress) this.hudProgress.textContent = `${this.progress} / ${this.TOTAL_ROUNDS}`;
+
+          // Accuracy Calculation
+          const totalAttempts = this.correctCount + this.wrongCount;
+          const accuracy = totalAttempts === 0 ? 100 : Math.round((this.correctCount / totalAttempts) * 100);
+          if (this.hudAccuracy) this.hudAccuracy.textContent = `${accuracy}%`;
+
+          // Hearts Display
+          if (this.hudHearts) {
+            const heartSpans = this.hudHearts.querySelectorAll('.heart-icon');
+            heartSpans.forEach((span, i) => {
+              if (i < this.lives) {
+                span.className = 'heart-icon';
+              } else {
+                span.className = 'heart-icon lost';
+              }
+            });
+          }
+        }
+
+        // Check if pointer/fingertip is inside a card rect
+        isInside(x, y, card) {
+          if (!card || card.matched || card.alpha < 0.2) return false;
+          return x >= card.x && x <= card.x + card.w && y >= card.y && y <= card.y + card.h;
+        }
+
+        // Handle Pointer (Mouse / Touch) Events
+        handlePointerDown(x, y) {
+          if (!this.gameActive || this.isGameOver) return;
+          // Check left cards
+          for (const card of this.leftCards) {
+            if (this.isInside(x, y, card)) {
+              this.selectedLeftCard = card;
+              this.audio.playSelect();
+              this.particles.spawnSparkles(card.x + card.w, card.y + card.h / 2, 8, '#38bdf8');
+              break;
+            }
+          }
+        }
+
+        handlePointerMove(x, y) {
+          // Handled visually in game loop
+        }
+
+        handlePointerUp(x, y) {
+          if (!this.selectedLeftCard) return;
+
+          // Check if released over right card
+          let hitRight = null;
+          for (const card of this.rightCards) {
+            if (this.isInside(x, y, card)) {
+              hitRight = card;
+              break;
+            }
+          }
+
+          if (hitRight) {
+            this.evaluateMatch(this.selectedLeftCard, hitRight);
+          }
+
+          this.selectedLeftCard = null;
+        }
+
+        // Continuous AR Hand Interaction
+        processARInteraction(handX, handY) {
+          if (!this.gameActive || this.isGameOver) return;
+
+          // 1. If no left card currently selected, check if index tip touches any left card
+          if (!this.selectedLeftCard) {
+            for (const card of this.leftCards) {
+              if (this.isInside(handX, handY, card)) {
+                this.selectedLeftCard = card;
+                this.audio.playSelect();
+                this.particles.spawnSparkles(card.x + card.w, card.y + card.h / 2, 10, '#38bdf8');
+                break;
+              }
+            }
+          } else {
+            // 2. If left card is selected, check if user's index tip reaches any right card
+            for (const card of this.rightCards) {
+              if (this.isInside(handX, handY, card)) {
+                this.evaluateMatch(this.selectedLeftCard, card);
+                this.selectedLeftCard = null;
+                break;
+              }
+            }
+          }
+        }
+
+        // Match Evaluation
+        evaluateMatch(leftCard, rightCard) {
+          if (leftCard.id === rightCard.id) {
+            // --- CORRECT MATCH ---
+            leftCard.matched = true;
+            rightCard.matched = true;
+            this.score += 10;
+            this.progress++;
+            this.correctCount++;
+
+            // Audio & FX
+            this.audio.playChime();
+            this.particles.spawnSparkles(leftCard.x + leftCard.w / 2, leftCard.y + leftCard.h / 2, 24, '#10b981');
+            this.particles.spawnSparkles(rightCard.x + rightCard.w / 2, rightCard.y + rightCard.h / 2, 24, '#10b981');
+            this.particles.spawnLinePulse(
+              leftCard.x + leftCard.w, leftCard.y + leftCard.h / 2,
+              rightCard.x, rightCard.y + rightCard.h / 2,
+              18
+            );
+
+            this.updateHUD();
+
+            // Check if wave complete
+            const activeInWave = this.leftCards.filter(c => !c.matched).length;
+            if (activeInWave === 0) {
+              if (this.progress < this.TOTAL_ROUNDS && (this.waveIndex + 1) * this.CARDS_PER_WAVE < this.shuffledQuestions.length) {
+                // Smooth transition to next wave
+                setTimeout(() => {
+                  this.loadWave(this.waveIndex + 1);
+                }, 450);
+              } else {
+                // Game Finished!
+                setTimeout(() => {
+                  this.showSummaryModal(true);
+                }, 600);
+              }
+            }
+          } else {
+            // --- INCORRECT MATCH ---
+            this.wrongCount++;
+            this.lives--;
+            this.audio.playError();
+
+            // Trigger shake & error laser
+            leftCard.shake = 16;
+            rightCard.shake = 16;
+            this.errorFeedback = {
+              x1: leftCard.x + leftCard.w,
+              y1: leftCard.y + leftCard.h / 2,
+              x2: rightCard.x,
+              y2: rightCard.y + rightCard.h / 2,
+              timer: 18
+            };
+
+            this.updateHUD();
+
+            // Check Game Over
+            if (this.lives <= 0) {
+              this.isGameOver = true;
+              this.audio.playGameOver();
+              setTimeout(() => {
+                this.showSummaryModal(false);
+              }, 600);
+            }
+          }
+        }
+
+        // --- 8. SUMMARY SCREEN (ZERO-CRASH CUSTOM MODAL) ---
+        showSummaryModal(isVictory) {
+          this.gameActive = false;
+          if (this.timerInterval) clearInterval(this.timerInterval);
+
+          const totalAttempts = this.correctCount + this.wrongCount;
+          const accuracy = totalAttempts === 0 ? 0 : Math.round((this.correctCount / totalAttempts) * 100);
+
+          let stars = 1;
+          if (isVictory && accuracy >= 80) stars = 3;
+          else if (isVictory && accuracy >= 50) stars = 2;
+          else if (!isVictory && this.correctCount >= 5) stars = 1;
+          else stars = 0;
+
+          if (isVictory) {
+            this.audio.playVictory();
+            this.modalBadge.textContent = '🏆';
+            this.modalTitle.textContent = '🎉 ยินดีด้วย! ผ่านการทดสอบ';
+            this.modalSubtitle.textContent = `คุณจับคู่คำศัพท์ได้ครบ ${this.TOTAL_ROUNDS} ข้อ อย่างยอดเยี่ยม!`;
+          } else {
+            this.modalBadge.textContent = '💥';
+            this.modalTitle.textContent = 'พลังชีวิตหมดแล้ว!';
+            this.modalSubtitle.textContent = 'ไม่เป็นไรนะ! ฝึกฝนทบทวนคำศัพท์แล้วมาลองใหม่อีกครั้ง';
+          }
+
+          // Stars Rendering
+          if (this.modalStars) {
+            const starSpans = this.modalStars.querySelectorAll('.star-icon');
+            starSpans.forEach((span, i) => {
+              if (i < stars) {
+                span.className = 'star-icon earned';
+              } else {
+                span.className = 'star-icon';
+              }
+            });
+          }
+
+          if (this.summaryScore) this.summaryScore.textContent = this.score;
+          if (this.summaryAccuracy) this.summaryAccuracy.textContent = `${accuracy}%`;
+
+          const mins = Math.floor(this.timerSeconds / 60).toString().padStart(2, '0');
+          const secs = (this.timerSeconds % 60).toString().padStart(2, '0');
+          if (this.summaryTime) this.summaryTime.textContent = `${mins}:${secs}`;
+          if (this.summaryRatio) this.summaryRatio.textContent = `${this.correctCount} / ${this.wrongCount}`;
+
+          if (this.summaryModal) this.summaryModal.classList.add('show');
+        }
+
+        hideModal() {
+          if (this.summaryModal) this.summaryModal.classList.remove('show');
+        }
+
+        // --- 9. RENDER PIPELINE (60 FPS) ---
+        gameLoop() {
+          const ctx = this.ctx;
+          const w = this.canvas.width;
+          const h = this.canvas.height;
+
+          // 1. Draw Background (Webcam or Cyber AR Grid)
+          this.renderBackground(ctx, w, h);
+
+          // 2. Update & Draw Cards
+          this.renderCards(ctx);
+
+          // 3. Draw Active Direct Laser Beam
+          this.renderLaserBeam(ctx);
+
+          // 4. Draw Error Beam feedback if any
+          this.renderErrorFeedback(ctx);
+
+          // 5. Draw Particle Sparkles
+          this.particles.update();
+          this.particles.draw(ctx);
+
+          // 6. Draw Index Finger Aura & Center Pinpoint (Landmark 8)
+          this.renderIndexFingerAura(ctx);
+
+          requestAnimationFrame(this.gameLoop);
+        }
+
+        renderBackground(ctx, w, h) {
+          ctx.clearRect(0, 0, w, h);
+
+          // If camera stream is live, draw mirrored webcam feed
+          if (this.useCamera && this.video.readyState >= 2) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(this.video, -w, 0, w, h);
+            ctx.restore();
+
+            // Educational dark semi-transparent overlay with subtle gradient for high card contrast
+            ctx.fillStyle = 'rgba(9, 13, 22, 0.58)';
+            ctx.fillRect(0, 0, w, h);
+          } else {
+            // Clean Cyber Educational AR Canvas
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+            bgGrad.addColorStop(0, '#0f172a');
+            bgGrad.addColorStop(1, '#020617');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Subtle animated perspective grid
+            ctx.save();
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.05)';
+            ctx.lineWidth = 1;
+            const step = 40;
+            for (let x = 0; x < w; x += step) {
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x, h);
+              ctx.stroke();
+            }
+            for (let y = 0; y < h; y += step) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(w, y);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+
+        renderCards(ctx) {
+          const drawCardList = (cards, isLeft) => {
+            for (const card of cards) {
+              // Interpolate towards target position and handle fade out
+              card.x += (card.targetX - card.x) * 0.18;
+              card.y += (card.targetY - card.y) * 0.18;
+              card.w += (card.targetW - card.w) * 0.18;
+              card.h += (card.targetH - card.h) * 0.18;
+
+              if (card.matched) {
+                card.alpha = Math.max(0, card.alpha - 0.08);
+              } else {
+                card.alpha = Math.min(1, card.alpha + 0.1);
+              }
+
+              if (card.shake > 0) {
+                card.shake *= 0.82;
+                if (card.shake < 0.2) card.shake = 0;
+              }
+
+              if (card.alpha <= 0.01) continue;
+
+              const shakeOffset = Math.sin(performance.now() * 0.06) * card.shake;
+              const drawX = card.x + shakeOffset;
+              const drawY = card.y;
+              const r = 16;
+
+              ctx.save();
+              ctx.globalAlpha = card.alpha;
+
+              // Card Glow & Surface
+              const isSelected = this.selectedLeftCard === card;
+              const isHovered = this.isInside(this.smoothHand.x, this.smoothHand.y, card);
+
+              let borderColor = isLeft ? 'rgba(56, 189, 248, 0.35)' : 'rgba(168, 85, 247, 0.35)';
+              let fillColor = isLeft ? 'rgba(15, 23, 42, 0.82)' : 'rgba(30, 27, 75, 0.82)';
+
+              if (card.shake > 0.5) {
+                borderColor = '#ef4444';
+                fillColor = 'rgba(239, 68, 68, 0.25)';
+              } else if (isSelected || isHovered) {
+                borderColor = isLeft ? '#38bdf8' : '#c084fc';
+                fillColor = isLeft ? 'rgba(14, 116, 144, 0.75)' : 'rgba(126, 34, 206, 0.75)';
+                ctx.shadowColor = borderColor;
+                ctx.shadowBlur = 18;
+              }
+
+              // Draw Rounded Rectangle
+              ctx.beginPath();
+              ctx.roundRect(drawX, drawY, card.w, card.h, r);
+              ctx.fillStyle = fillColor;
+              ctx.fill();
+
+              ctx.lineWidth = isSelected ? 2.5 : 1.5;
+              ctx.strokeStyle = borderColor;
+              ctx.stroke();
+
+              // Card Text & Icon
+              const textY = drawY + card.h / 2;
+              if (isLeft) {
+                // Left Card: Icon + English Word
+                ctx.font = '22px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(card.subtext, drawX + 16, textY);
+
+                ctx.font = '700 20px Prompt, sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(card.text, drawX + 54, textY);
+
+                // Right connector anchor dot
+                ctx.beginPath();
+                ctx.arc(drawX + card.w - 10, textY, isSelected ? 6 : 4, 0, Math.PI * 2);
+                ctx.fillStyle = isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.4)';
+                ctx.fill();
+              } else {
+                // Right Card: Thai Translation
+                ctx.font = '600 20px Prompt, sans-serif';
+                ctx.fillStyle = '#f8fafc';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(card.text, drawX + card.w / 2, textY);
+
+                // Left connector anchor dot
+                ctx.beginPath();
+                ctx.arc(drawX + 10, textY, isHovered ? 6 : 4, 0, Math.PI * 2);
+                ctx.fillStyle = isHovered ? '#c084fc' : 'rgba(255, 255, 255, 0.4)';
+                ctx.fill();
+              }
+
+              ctx.restore();
+            }
+          };
+
+          drawCardList(this.leftCards, true);
+          drawCardList(this.rightCards, false);
+        }
+
+        renderLaserBeam(ctx) {
+          if (!this.selectedLeftCard) return;
+
+          const startX = this.selectedLeftCard.x + this.selectedLeftCard.w;
+          const startY = this.selectedLeftCard.y + this.selectedLeftCard.h / 2;
+          const targetX = this.smoothHand.x;
+          const targetY = this.smoothHand.y;
+
+          if (targetX < 0) return;
+
+          ctx.save();
+          // Multi-layer Glowing Neon Laser Beam
+          // Layer 1: Wide blur aura
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(targetX, targetY);
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.3)';
+          ctx.lineWidth = 14;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+
+          // Layer 2: Radiant cyan beam
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(targetX, targetY);
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 16;
+          ctx.lineWidth = 5;
+          ctx.stroke();
+
+          // Layer 3: White hot core
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(targetX, targetY);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.restore();
+        }
+
+        renderErrorFeedback(ctx) {
+          if (!this.errorFeedback) return;
+          this.errorFeedback.timer--;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(this.errorFeedback.x1, this.errorFeedback.y1);
+          ctx.lineTo(this.errorFeedback.x2, this.errorFeedback.y2);
+          ctx.strokeStyle = `rgba(239, 68, 68, ${this.errorFeedback.timer / 18})`;
+          ctx.lineWidth = 6;
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 14;
+          ctx.stroke();
+          ctx.restore();
+
+          if (this.errorFeedback.timer <= 0) {
+            this.errorFeedback = null;
+          }
+        }
+
+        // --- 10. INDEX FINGER AURA GLOW & CENTER PINPOINT (LANDMARK 8) ---
+        renderIndexFingerAura(ctx) {
+          const x = this.smoothHand.x;
+          const y = this.smoothHand.y;
+
+          if (x < 0 || y < 0 || (!this.hasHand && this.controlMode === 'ar')) return;
+
+          ctx.save();
+          const t = performance.now() * 0.005;
+
+          // 1. Outer Radiant Aura Glow Circle (Cyan & Emerald)
+          const radius = 26 + Math.sin(t * 3) * 4;
+          const auraGrad = ctx.createRadialGradient(x, y, 4, x, y, radius);
+          auraGrad.addColorStop(0, 'rgba(56, 189, 248, 0.9)');
+          auraGrad.addColorStop(0.5, 'rgba(6, 182, 212, 0.4)');
+          auraGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = auraGrad;
+          ctx.fill();
+
+          // 2. Rotating Energy Ring
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(t * 2);
+          ctx.beginPath();
+          ctx.arc(0, 0, 16, 0, Math.PI * 2);
+          ctx.setLineDash([4, 6]);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 10;
+          ctx.stroke();
+          ctx.restore();
+
+          // 3. Center Pinpoint (Exact Landmark 8 Coordinate Lock)
+          ctx.beginPath();
+          ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = '#ffffff';
+          ctx.shadowBlur = 12;
+          ctx.fill();
+
+          ctx.restore();
+        }
+
+        // --- 11. STANDALONE SINGLE HTML EXPORTER ---
+        downloadSingleHTML() {
+          const htmlContent = '<!doctype html>\n' + document.documentElement.outerHTML;
+          const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'Vocab_Match_AR_Game.html';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      // Initialize on DOM Ready
+      window.addEventListener('DOMContentLoaded', () => {
+        new VocabMatchAR();
+      });
+    </script>
+  </body>
+</html>
+
+
